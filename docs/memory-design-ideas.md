@@ -9,6 +9,7 @@ This document defines a simple MVP for local user memory derived only from dicta
 - Focus on ongoing context and likely continuation.
 - Allow long-term interest and role signals only when evidence is repeated over time.
 - Keep injection small and deterministic.
+- Memory is disabled by default, and the same warning as the active app context toggle should appear when enabling it.
 
 Formatting instructions belong in the model prompt/template, not in persistent memory.
 

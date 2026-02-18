@@ -376,7 +376,7 @@ export function useAddHistoryEntry() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["history"] });
 			// Notify other windows about history change
-			tauriAPI.emitHistoryChanged();
+			void tauriAPI.emitHistoryChanged();
 		},
 	});
 }
@@ -538,6 +538,24 @@ export function useUpdateSendActiveAppContextEnabled() {
 			showSettingsError(
 				`Failed to update active app context setting: ${error.message}`,
 			);
+		},
+	});
+}
+
+// Memory enabled mutation
+export function useUpdateMemoryEnabled() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (enabled: boolean) => {
+			await tauriAPI.updateMemoryEnabled(enabled);
+		},
+		onSuccess: (_data, enabled) => {
+			queryClient.invalidateQueries({ queryKey: ["settings"] });
+			tauriAPI.emitSettingsChanged();
+			showSettingsSuccess(`Memory ${enabled ? "enabled" : "disabled"}`);
+		},
+		onError: (error) => {
+			showSettingsError(`Failed to update memory setting: ${error.message}`);
 		},
 	});
 }

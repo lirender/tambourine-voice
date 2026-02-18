@@ -8,6 +8,7 @@ import {
 	useUpdateCleanupPromptSections,
 	useUpdateLLMFormattingEnabled,
 	useUpdateLLMTimeoutRawFallbackEnabled,
+	useUpdateMemoryEnabled,
 	useUpdateSendActiveAppContextEnabled,
 } from "../../lib/queries";
 import type { CleanupPromptSections, PromptSection } from "../../lib/tauri";
@@ -30,10 +31,12 @@ export function PromptSettings() {
 	const llmFormattingMutation = useUpdateLLMFormattingEnabled();
 	const llmTimeoutRawFallbackMutation = useUpdateLLMTimeoutRawFallbackEnabled();
 	const activeAppContextMutation = useUpdateSendActiveAppContextEnabled();
+	const memoryEnabledMutation = useUpdateMemoryEnabled();
 
 	// Modal for warning when disabling LLM formatting
 	const [disableWarningOpened, disableWarningHandlers] = useDisclosure(false);
 	const [focusWarningOpened, focusWarningHandlers] = useDisclosure(false);
+	const [memoryWarningOpened, memoryWarningHandlers] = useDisclosure(false);
 
 	// Consolidated local state for all sections using discriminated union
 	const [localSections, setLocalSections] =
@@ -220,6 +223,19 @@ export function PromptSettings() {
 		focusWarningHandlers.close();
 	};
 
+	const handleMemoryToggle = (checked: boolean) => {
+		if (checked) {
+			memoryWarningHandlers.open();
+		} else {
+			memoryEnabledMutation.mutate(false);
+		}
+	};
+
+	const confirmEnableMemory = () => {
+		memoryEnabledMutation.mutate(true);
+		memoryWarningHandlers.close();
+	};
+
 	return (
 		<div className="settings-section animate-in animate-in-delay-4">
 			<h3 className="settings-section-title">LLM Formatting</h3>
@@ -286,6 +302,26 @@ export function PromptSettings() {
 							handleActiveAppContextToggle(event.currentTarget.checked)
 						}
 						disabled={activeAppContextMutation.isPending}
+						size="md"
+						color="gray"
+					/>
+				</div>
+				<div className="settings-row">
+					<div>
+						<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+							<p className="settings-label">Enable Memory</p>
+							<StatusIndicator status={memoryEnabledMutation.status} />
+						</div>
+						<p className="settings-description">
+							Store cross-session context in a local markdown file
+						</p>
+					</div>
+					<Switch
+						checked={settings?.memory_enabled ?? false}
+						onChange={(event) =>
+							handleMemoryToggle(event.currentTarget.checked)
+						}
+						disabled={memoryEnabledMutation.isPending}
 						size="md"
 						color="gray"
 					/>
@@ -434,6 +470,28 @@ export function PromptSettings() {
 					</Button>
 					<Button color="orange" onClick={confirmEnableActiveAppContext}>
 						Enable Active App Context
+					</Button>
+				</div>
+			</Modal>
+			<Modal
+				opened={memoryWarningOpened}
+				onClose={memoryWarningHandlers.close}
+				title="Enable memory?"
+				centered
+				size="md"
+			>
+				<Text size="sm" mb="md">
+					This experimental feature can improve dictation quality by adapting
+					formatting to your active app or window. It might send personal data
+					about your active app/window to the server, and if you connect to a
+					cloud service, that data will be sent to the cloud service as well.
+				</Text>
+				<div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+					<Button variant="default" onClick={memoryWarningHandlers.close}>
+						Cancel
+					</Button>
+					<Button color="orange" onClick={confirmEnableMemory}>
+						Enable Memory
 					</Button>
 				</div>
 			</Modal>
