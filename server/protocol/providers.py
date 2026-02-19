@@ -129,10 +129,10 @@ def _parse_provider_selection[
     # Try to parse as known provider
     try:
         provider_id = provider_enum(provider_value)
-        return known_provider_class(mode="known", provider_id=provider_id)
+        return known_provider_class.model_validate({"mode": "known", "providerId": provider_id})
     except ValueError:
         # Unknown provider - forward compatibility
-        return other_provider_class(mode="other", provider_id=provider_value)
+        return other_provider_class.model_validate({"mode": "other", "providerId": provider_value})
 
 
 def parse_stt_provider_selection(provider_value: str | None) -> STTProviderSelection | None:
