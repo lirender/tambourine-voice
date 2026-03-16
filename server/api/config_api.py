@@ -177,7 +177,7 @@ def build_provider_list(
             value=provider_id.value,
             label=labels.get(provider_id, provider_id.value),
             is_local=provider_id in local_provider_ids,
-            model=getattr(service, "model_name", None),
+            model=getattr(getattr(service, "_settings", None), "model", None),
         )
         for provider_id, service in services.items()
     ]

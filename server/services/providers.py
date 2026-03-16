@@ -4,7 +4,7 @@ This module provides factory functions that use the provider registry to
 create service instances with direct class instantiation (no importlib).
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from pipecat.services.llm_service import LLMService
@@ -38,6 +38,25 @@ __all__ = [
 ]
 
 
+def _build_kwargs_with_settings(
+    kwargs: dict[str, Any],
+    settings_class: type | None,
+    settings_kwargs_keys: frozenset[str],
+) -> dict[str, Any]:
+    """Route settings-bound kwargs into a Settings object, return the rest as direct kwargs."""
+    if settings_class is None:
+        return kwargs
+
+    settings_kwargs = {k: kwargs.pop(k) for k in list(kwargs) if k in settings_kwargs_keys}
+    if settings_kwargs:
+        existing = kwargs.get("settings")
+        if existing is not None:
+            existing.apply_update(settings_class(**settings_kwargs))
+        else:
+            kwargs["settings"] = settings_class(**settings_kwargs)
+    return kwargs
+
+
 def _create_stt_service_from_config(
     config: STTProviderConfig,
     settings: "Settings",
@@ -66,6 +85,7 @@ def _create_stt_service_from_config(
     # Credential-mapped values (e.g., from .env) must win over defaults.
     kwargs = dict(config.default_kwargs)
     kwargs.update(config.credential_mapper.map_credentials(settings))
+    kwargs = _build_kwargs_with_settings(kwargs, config.settings_class, config.settings_kwargs_keys)
 
     logger.info(f"Creating STT service: {config.provider_id.value}")
 
@@ -101,6 +121,7 @@ def _create_llm_service_from_config(
     # Credential-mapped values (e.g., from .env) must win over defaults.
     kwargs = dict(config.default_kwargs)
     kwargs.update(config.credential_mapper.map_credentials(settings))
+    kwargs = _build_kwargs_with_settings(kwargs, config.settings_class, config.settings_kwargs_keys)
 
     logger.info(f"Creating LLM service: {config.provider_id.value}")
 
