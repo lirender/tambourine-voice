@@ -1,10 +1,24 @@
 use anyhow::Context;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager,
 };
 use tauri_utils::config::BackgroundThrottlingPolicy;
+
+/// Timestamp (epoch ms) of the last time the main window was hidden due to blur.
+/// Used to prevent the tray click handler from immediately re-showing the window
+/// when the user clicks the tray icon to dismiss it.
+static LAST_BLUR_HIDE_MS: AtomicU64 = AtomicU64::new(0);
+
+fn current_epoch_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 
 mod active_app_context;
 mod audio;
@@ -684,6 +698,17 @@ pub fn run() {
                 }));
             }
 
+            // Auto-hide main window when it loses focus (menubar app behavior)
+            if let Some(main_window) = app.get_webview_window("main") {
+                let window_for_blur = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        LAST_BLUR_HIDE_MS.store(current_epoch_ms(), Ordering::Relaxed);
+                        let _ = window_for_blur.hide();
+                    }
+                });
+            }
+
             // Setup system tray
             setup_tray(app.handle())?;
 
@@ -730,14 +755,44 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                rect,
                 ..
             } = event
             {
+                // If the window was just hidden due to blur (user clicking tray to dismiss),
+                // don't re-show it — this prevents the show/hide flicker.
+                let now = current_epoch_ms();
+                let last_hide = LAST_BLUR_HIDE_MS.load(Ordering::Relaxed);
+                if now.saturating_sub(last_hide) < 300 {
+                    return;
+                }
+
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
                     } else {
+                        // Position the window centered below the tray icon
+                        let scale = window.scale_factor().unwrap_or(2.0);
+                        let (tray_x, tray_y) = match rect.position {
+                            tauri::Position::Physical(pos) => {
+                                (f64::from(pos.x) / scale, f64::from(pos.y) / scale)
+                            }
+                            tauri::Position::Logical(pos) => (pos.x, pos.y),
+                        };
+                        let (tray_w, tray_h) = match rect.size {
+                            tauri::Size::Physical(size) => {
+                                (f64::from(size.width) / scale, f64::from(size.height) / scale)
+                            }
+                            tauri::Size::Logical(size) => (size.width, size.height),
+                        };
+                        let window_width = 380.0_f64;
+                        let x = tray_x + tray_w / 2.0 - window_width / 2.0;
+                        let y = tray_y + tray_h + 4.0;
+
+                        let _ = window.set_position(tauri::Position::Logical(
+                            tauri::LogicalPosition { x, y },
+                        ));
                         let _ = window.show();
                         let _ = window.set_focus();
                     }

@@ -1,6 +1,12 @@
-import { Kbd, Loader, NavLink, Text, Title, Tooltip } from "@mantine/core";
+import {
+	Kbd,
+	Loader,
+	SegmentedControl,
+	Text,
+	Tooltip,
+} from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { AlertCircle, Home, Settings } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { HistoryFeed } from "./components/HistoryFeed";
@@ -91,7 +97,7 @@ function ConnectionStatusIndicator() {
 	);
 }
 
-function Sidebar({
+function TopBar({
 	activeView,
 	onViewChange,
 }: {
@@ -99,39 +105,23 @@ function Sidebar({
 	onViewChange: (view: View) => void;
 }) {
 	return (
-		<aside className="sidebar">
-			<header className="sidebar-header">
-				<div className="sidebar-logo">
-					<Logo size={32} />
-				</div>
-			</header>
-			<nav className="sidebar-nav">
-				<Tooltip label="Home" position="right" withArrow>
-					<NavLink
-						leftSection={<Home size={20} />}
-						active={activeView === "home"}
-						onClick={() => onViewChange("home")}
-						variant="filled"
-						className="sidebar-nav-link"
-						aria-label="Navigate to Home"
-					/>
-				</Tooltip>
-				<Tooltip label="Settings" position="right" withArrow>
-					<NavLink
-						leftSection={<Settings size={20} />}
-						active={activeView === "settings"}
-						onClick={() => onViewChange("settings")}
-						variant="filled"
-						className="sidebar-nav-link"
-						aria-label="Navigate to Settings"
-					/>
-				</Tooltip>
-			</nav>
-
-			<footer className="sidebar-footer">
+		<div className="menubar-header">
+			<div className="menubar-title-row">
+				<Logo size={20} />
+				<span className="menubar-title">Tambourine</span>
 				<ConnectionStatusIndicator />
-			</footer>
-		</aside>
+			</div>
+			<SegmentedControl
+				value={activeView}
+				onChange={(v) => onViewChange(v as View)}
+				data={[
+					{ label: "Home", value: "home" },
+					{ label: "Settings", value: "settings" },
+				]}
+				size="xs"
+				fullWidth
+			/>
+		</div>
 	);
 }
 
@@ -230,17 +220,7 @@ function InstructionsCard() {
 function HomeView() {
 	return (
 		<div className="main-content">
-			<header className="animate-in" style={{ marginBottom: 32 }}>
-				<Title order={1} mb={4}>
-					Welcome to Tambourine
-				</Title>
-				<Text c="dimmed" size="sm">
-					~-~-~-~-~-~
-				</Text>
-			</header>
-
 			<InstructionsCard />
-
 			<HistoryFeed />
 		</div>
 	);
@@ -282,15 +262,6 @@ function SettingsView() {
 				</div>
 			)}
 			<div className="main-content">
-				<header className="animate-in" style={{ marginBottom: 32 }}>
-					<Title order={1} mb={4}>
-						Settings
-					</Title>
-					<Text c="dimmed" size="sm">
-						Configure your preferences
-					</Text>
-				</header>
-
 				<ProvidersSettings />
 				<AudioSettings />
 				<HotkeySettings />
@@ -429,7 +400,7 @@ export default function App() {
 
 	return (
 		<div className="app-layout">
-			<Sidebar activeView={activeView} onViewChange={setActiveView} />
+			<TopBar activeView={activeView} onViewChange={setActiveView} />
 			{activeView === "home" ? <HomeView /> : <SettingsView />}
 		</div>
 	);

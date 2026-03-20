@@ -16,11 +16,15 @@
 			{
 				"title": "Tambourine",
 				"label": "main",
-				"width": 1280,
-				"height": 720,
-				"resizable": true,
+				"width": 380,
+				"height": 520,
+				"resizable": false,
 				"fullscreen": false,
-				"center": true
+				"visible": false,
+				"decorations": false,
+				"transparent": true,
+				"skipTaskbar": true,
+				"alwaysOnTop": true
 			}
 		],
 		"security": {
