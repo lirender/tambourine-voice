@@ -46,6 +46,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from api.config_api import config_router
+from api.meeting_api import meeting_router
 from config.settings import Settings
 from processors.client_manager import ClientConnectionManager
 from processors.configuration import ConfigurationHandler
@@ -604,6 +605,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # Include config routes
 app.include_router(config_router)
+app.include_router(meeting_router)
 
 
 @app.get("/health")
@@ -922,6 +924,7 @@ def main(
     if services is None:
         raise SystemExit(1)
     app.state.services = services
+    app.state.settings = settings
 
     logger.info("=" * 60)
     logger.success("Tambourine Server Ready!")
