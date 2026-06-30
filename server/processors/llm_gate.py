@@ -43,11 +43,19 @@ class LLMGateFilter(FrameProcessor):
     - Passes all frames through unchanged
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the LLM gate filter."""
+    def __init__(self, formatter: Any = None, **kwargs: Any) -> None:
+        """Initialize the LLM gate filter.
+
+        Args:
+            formatter: Optional async callable (text: str) -> str that formats the
+                full transcript via a direct LLM call. When set and formatting is
+                enabled, the gate uses it instead of the (fragile) streaming
+                aggregator path.
+        """
         super().__init__(**kwargs)
         self._llm_formatting_enabled: bool = True
         self._accumulated_text: list[str] = []
+        self._formatter = formatter
 
     def set_llm_formatting_enabled(self, enabled: bool) -> None:
         """Set whether LLM formatting is enabled.
@@ -73,46 +81,52 @@ class LLMGateFilter(FrameProcessor):
         self._accumulated_text = []
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
-        """Process frames, gating them based on LLM formatting state."""
+        """Process frames. The gate always accumulates the transcript and emits
+        the result itself (raw, or formatted via a direct LLM call), bypassing the
+        fragile streaming aggregator entirely.
+        """
         await super().process_frame(frame, direction)
 
-        if not self._llm_formatting_enabled:
-            # LLM bypassed - selective gating
-            match frame:
-                case UserStartedSpeakingFrame():
-                    # Block - aggregator should not start accumulating
-                    self._accumulated_text = []
-                    logger.debug("LLM bypassed: blocking UserStartedSpeakingFrame")
+        match frame:
+            case UserStartedSpeakingFrame():
+                # Block - the downstream aggregator is bypassed in both modes.
+                self._accumulated_text = []
 
-                case TranscriptionFrame(text=text) if text:
-                    # Accumulate text for raw output
-                    self._accumulated_text.append(text)
-                    # Pass through for RTVI UserTranscript events
-                    await self.push_frame(frame, direction)
+            case TranscriptionFrame(text=text) if text:
+                self._accumulated_text.append(text)
+                # Pass through for RTVI UserTranscript events (live transcript UI).
+                await self.push_frame(frame, direction)
 
-                case UserStoppedSpeakingFrame():
-                    # Emit raw transcription instead of passing to aggregator
-                    combined_text = " ".join(self._accumulated_text).strip()
-                    logger.info(f"LLM bypassed: emitting raw transcription: '{combined_text}'")
+            case UserStoppedSpeakingFrame():
+                combined_text = " ".join(self._accumulated_text).strip()
+                self._accumulated_text = []
 
-                    if combined_text:
-                        await self.push_frame(
-                            RTVIServerMessageFrame(
-                                data=RawTranscriptionMessage(text=combined_text).model_dump()
-                            ),
-                            direction,
-                        )
-                    else:
-                        await self.push_frame(
-                            RTVIServerMessageFrame(data=EmptyTranscriptMessage().model_dump()),
-                            direction,
-                        )
+                if not combined_text:
+                    await self.push_frame(
+                        RTVIServerMessageFrame(data=EmptyTranscriptMessage().model_dump()),
+                        direction,
+                    )
+                    return
 
-                    self._accumulated_text = []
+                output_text = combined_text
+                if self._llm_formatting_enabled and self._formatter is not None:
+                    try:
+                        output_text = await self._formatter(combined_text)
+                        logger.info(f"LLM formatted: '{combined_text}' -> '{output_text}'")
+                    except Exception as e:  # noqa: BLE001 - never lose the dictation
+                        logger.warning(f"Formatting failed ({e}); emitting raw transcription")
+                        output_text = combined_text
+                else:
+                    logger.info(f"Raw transcription (formatting off): '{combined_text}'")
 
-                case _:
-                    # Pass through all other frames
-                    await self.push_frame(frame, direction)
-        else:
-            # LLM enabled - pass everything through
-            await self.push_frame(frame, direction)
+                if not output_text.strip():
+                    output_text = combined_text  # never emit empty after formatting
+                await self.push_frame(
+                    RTVIServerMessageFrame(
+                        data=RawTranscriptionMessage(text=output_text.strip()).model_dump()
+                    ),
+                    direction,
+                )
+
+            case _:
+                await self.push_frame(frame, direction)

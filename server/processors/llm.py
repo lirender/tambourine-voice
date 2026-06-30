@@ -298,3 +298,58 @@ def combine_prompt_sections(
         parts.append(dictionary_custom if dictionary_custom else DICTIONARY_PROMPT_DEFAULT)
 
     return "\n\n".join(parts)
+
+
+async def format_dictation_text(
+    text: str,
+    system_prompt: str,
+    base_url: str,
+    model: str,
+    timeout: float = 20.0,
+) -> str:
+    """Format a raw dictation transcript via a direct LLM chat call.
+
+    This bypasses pipecat's streaming aggregator (which had a frame-ordering bug
+    where the final transcript arrived after the user turn closed, so the LLM got
+    an empty user message). Here the FULL transcript is passed as the user turn,
+    so the LLM reliably applies the formatting prompt (filler removal, backtrack
+    corrections, punctuation). Returns the cleaned text, or raises on failure.
+
+    base_url should include the OpenAI-compatible suffix (e.g.
+    http://localhost:11434/v1 for Ollama, http://gb10.local:1234/v1 for LM Studio).
+    """
+    import httpx
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text},
+        ],
+        "stream": False,
+        "temperature": 0.2,
+    }
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
+    return _strip_preamble(content.strip())
+
+
+def _strip_preamble(text: str) -> str:
+    """Remove conversational preambles weaker models prepend despite instructions
+    (e.g. 'Here is the cleaned and formatted text:') and surrounding quotes."""
+    import re
+
+    # Drop a leading "Here is/Here's ...:" line followed by the actual text.
+    text = re.sub(
+        r"^(here(?:'s| is| are)\b[^\n:]{0,80}:)\s*\n+",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+    # Unwrap if the whole thing is quoted.
+    if len(text) >= 2 and text[0] in "\"'" and text[-1] == text[0]:
+        text = text[1:-1].strip()
+    return text

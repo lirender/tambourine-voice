@@ -810,9 +810,37 @@ async def webrtc_offer(
             services.available_llm_providers,
         )
 
-        # Create pipeline processors
+        # Create pipeline processors.
         turn_controller = TurnController()
-        llm_gate = LLMGateFilter()
+
+        # Direct dictation formatter: formats the full transcript via one LLM
+        # request/response, bypassing the fragile streaming aggregator. Uses the
+        # configured Ollama endpoint (or LM Studio if pointed there).
+        from processors.llm import format_dictation_text
+
+        # Formatter LLM is configurable: FORMATTER_BASE_URL / FORMATTER_MODEL
+        # override the default Ollama endpoint, e.g. point at GB10 LM Studio
+        # (http://gb10.local:1234/v1) for a stronger model. Falls back to Ollama.
+        import os as _os
+
+        _fmt_base = (
+            _os.environ.get("FORMATTER_BASE_URL")
+            or services.settings.ollama_base_url
+            or "http://localhost:11434/v1"
+        )
+        _fmt_model = (
+            _os.environ.get("FORMATTER_MODEL")
+            or services.settings.ollama_model
+            or "llama3"
+        )
+        logger.info(f"Dictation formatter: {_fmt_model} @ {_fmt_base}")
+
+        async def _dictation_formatter(text: str) -> str:
+            return await format_dictation_text(
+                text, context_manager.system_prompt, _fmt_base, _fmt_model
+            )
+
+        llm_gate = LLMGateFilter(formatter=_dictation_formatter)
         # Wire up turn controller to context manager for context reset coordination
         turn_controller.set_context_manager(context_manager)
 
