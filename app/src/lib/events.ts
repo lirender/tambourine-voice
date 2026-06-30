@@ -52,7 +52,42 @@ export const AppEvents = {
 
 	// Rust → All: Active app context updates
 	activeAppContextChanged: "active-app-context-changed",
+
+	// Rust → All: A meeting is starting soon (pre-meeting prep, ~5 min before)
+	meetingPrep: "meeting-prep",
+
+	// Rust → All: A meeting just ended (prompt to end the recording session)
+	meetingEnded: "meeting-ended",
 } as const;
+
+// =============================================================================
+// Calendar / meeting types — must match src-tauri/src/calendar/mod.rs
+// =============================================================================
+
+export interface MeetingAttendee {
+	name: string;
+	email: string | null;
+	isOrganizer: boolean;
+	isCurrentUser: boolean;
+}
+
+export interface Meeting {
+	id: string;
+	title: string;
+	start: string;
+	end: string;
+	startEpoch: number;
+	endEpoch: number;
+	location: string | null;
+	notes: string | null;
+	organizer: string | null;
+	attendees: MeetingAttendee[];
+}
+
+export interface MeetingEventPayload {
+	meeting: Meeting;
+	seconds_until_start: number;
+}
 
 // =============================================================================
 // Event Payloads - Must match src-tauri/src/events.rs

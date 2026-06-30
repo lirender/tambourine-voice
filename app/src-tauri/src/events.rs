@@ -44,6 +44,10 @@ pub enum EventName {
     NativeAudioData,
     /// Rust → All: Active app context updates
     ActiveAppContextChanged,
+    /// Rust → All: A meeting is starting soon (pre-meeting prep, ~5 min before)
+    MeetingPrep,
+    /// Rust → All: A meeting just ended (prompt to end the recording session)
+    MeetingEnded,
 }
 
 impl EventName {
@@ -65,6 +69,8 @@ impl EventName {
             Self::HistoryChanged => "history-changed",
             Self::NativeAudioData => "native-audio-data",
             Self::ActiveAppContextChanged => "active-app-context-changed",
+            Self::MeetingPrep => "meeting-prep",
+            Self::MeetingEnded => "meeting-ended",
         }
     }
 }

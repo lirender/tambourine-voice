@@ -125,6 +125,11 @@ class ConfigurationHandler:
                     )
                     return
                 logger.info(f"Auto mode for STT resolved to: {provider_id.value}")
+                # GB10 streaming ASR is primary but can drop off the network.
+                # If it's unreachable at connection time, fall back to local MLX
+                # Whisper so dictation never breaks (the "GB10 primary + auto
+                # fallback" design).
+                provider_id = await self._gb10_fallback(provider_id)
             case KnownSTTProvider(provider_id=provider_id):
                 pass  # Use directly
             case OtherSTTProvider(provider_id=raw_id):
@@ -150,6 +155,37 @@ class ConfigurationHandler:
         logger.success(f"Switched STT provider to: {provider_id.value}")
         # Echo back the original selection - client sent it, server validated it works
         await self._send_config_success(setting, selection)
+
+    async def _gb10_fallback(self, provider_id: STTProviderId) -> STTProviderId:
+        """If the resolved provider is the GB10 streaming ASR (Nemotron) but GB10
+        is unreachable, fall back to local MLX Whisper. Otherwise return as-is.
+        """
+        if provider_id != STTProviderId.NEMOTRON:
+            return provider_id
+        if STTProviderId.WHISPER_MLX not in self._stt_services:
+            return provider_id  # nothing to fall back to
+
+        # Derive the HTTP health URL from the configured WS ASR URL
+        # (ws://gb10.local:8770/ws -> http://gb10.local:8770/health).
+        ws_url = getattr(self._settings, "nemotron_asr_url", None) or ""
+        health = (
+            ws_url.replace("wss://", "https://")
+            .replace("ws://", "http://")
+            .rsplit("/", 1)[0]
+            + "/health"
+        )
+        try:
+            import httpx
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(health, timeout=0.6)
+            if resp.status_code == 200:
+                return provider_id  # GB10 up, keep streaming ASR
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"GB10 ASR unreachable ({e}); falling back to MLX Whisper")
+        else:
+            logger.warning("GB10 ASR health not OK; falling back to MLX Whisper")
+        return STTProviderId.WHISPER_MLX
 
     async def _switch_llm_provider(self, selection: LLMProviderSelection) -> None:
         """Switch to a different LLM provider.

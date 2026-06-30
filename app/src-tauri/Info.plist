@@ -4,9 +4,15 @@
 <dict>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSQuitAlwaysKeepsWindows</key>
+	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tambourine needs microphone access for voice dictation.</string>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>Tambourine needs accessibility access to type dictated text into other applications.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Tambourine reads your calendar to start recording before meetings and prepare you for them.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Tambourine reads your calendar to start recording before meetings and prepare you for them.</string>
 </dict>
 </plist>

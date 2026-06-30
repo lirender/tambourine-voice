@@ -1,0 +1,15 @@
+[package]
+name = "sckit-poc"
+version = "0.1.0"
+edition = "2021"
+description = "ScreenCaptureKit proof-of-concept: capture system audio from a target app"
+
+[[bin]]
+name = "sckit-poc"
+path = "src/main.rs"
+
+[dependencies]
+screencapturekit = { version = "1.5.4", features = ["macos_15_0"] }
+hound = "3.5"
+anyhow = "1.0"
+signal-hook = "0.3"

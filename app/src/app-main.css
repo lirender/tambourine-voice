@@ -527,3 +527,64 @@ body {
 .connection-status-dot.connected {
 	background-color: #22c55e;
 }
+
+/* Live recording indicator — the only ambient animation (DESIGN.md: motion). */
+.recording-dot {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: #FA5252;
+	flex: 0 0 auto;
+	box-shadow: 0 0 0 0 rgba(250, 82, 82, 0.6);
+	animation: recording-pulse 1.5s ease-in-out infinite;
+}
+@keyframes recording-pulse {
+	0% { box-shadow: 0 0 0 0 rgba(250, 82, 82, 0.5); }
+	70% { box-shadow: 0 0 0 8px rgba(250, 82, 82, 0); }
+	100% { box-shadow: 0 0 0 0 rgba(250, 82, 82, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.recording-dot { animation: none; }
+}
+
+/* Dashboard surface cards (DESIGN.md: surface #111 on near-black bg). */
+.dash-card {
+	background: var(--bg-card);
+	border: 1px solid var(--border-default);
+	border-radius: 12px;
+	padding: 14px;
+	margin-bottom: 12px;
+}
+.dash-card-title {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 0 0 10px;
+}
+.dash-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 6px;
+	padding: 14px 8px 6px;
+	color: var(--text-muted);
+}
+.dash-empty-icon {
+	opacity: 0.4;
+}
+
+/* Quiet link to demoted surfaces (e.g. dictation history). */
+.dash-link {
+	font-size: 13px;
+	color: var(--text-muted);
+	padding: 6px 2px;
+	display: inline-flex;
+	align-items: center;
+	transition: color 120ms ease;
+}
+.dash-link:hover {
+	color: var(--text-default, #C1C2C5);
+}

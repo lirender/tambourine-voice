@@ -52,3 +52,7 @@ package-lock.json
 app/package-lock.json
 
 .pnpm-store/
+# Personal meeting recordings/transcripts - never commit
+tools/transcripts/
+# Build artifact: calendar_helper is rebuilt by build.rs from the .swift source
+app/src-tauri/helpers/calendar_helper

@@ -1,12 +1,14 @@
 import {
+	Group,
 	Kbd,
 	Loader,
 	SegmentedControl,
 	Text,
 	Tooltip,
+	UnstyledButton,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { HistoryFeed } from "./components/HistoryFeed";
@@ -35,6 +37,11 @@ import {
 	tauriAPI,
 } from "./lib/tauri";
 import { useRecordingStore } from "./stores/recordingStore";
+import { invoke } from "@tauri-apps/api/core";
+import { useMeetingNotifications } from "./hooks/useMeetingNotifications";
+import { MeetingsSection, TranscriptsList } from "./components/MeetingsSection";
+import { UpcomingMeetings } from "./components/UpcomingMeetings";
+import { useMeetingStore } from "./stores/meetingStore";
 import "./app-main.css";
 
 type View = "home" | "settings";
@@ -171,56 +178,61 @@ function HotkeyDisplay({
 	);
 }
 
-function InstructionsCard() {
+function CompactShortcuts() {
 	const { data: settings } = useSettings();
-	const { data: shortcutErrors } = useShortcutErrors();
-
 	const toggleHotkey = settings?.toggle_hotkey ?? DEFAULT_TOGGLE_HOTKEY;
 	const holdHotkey = settings?.hold_hotkey ?? DEFAULT_HOLD_HOTKEY;
-	const pasteLastHotkey =
-		settings?.paste_last_hotkey ?? DEFAULT_PASTE_LAST_HOTKEY;
+	const pasteLastHotkey = settings?.paste_last_hotkey ?? DEFAULT_PASTE_LAST_HOTKEY;
 
 	return (
-		<div className="instructions-card animate-in">
-			<h2 className="instructions-card-title">Dictate with your voice</h2>
-			<div className="instructions-methods">
-				<div className="instruction-method">
-					<span className="instruction-label">Toggle:</span>
-					<HotkeyDisplay
-						config={toggleHotkey}
-						error={shortcutErrors?.toggle_error}
-					/>
-					<span className="instruction-desc">Press to start/stop</span>
-				</div>
-				<div className="instruction-method">
-					<span className="instruction-label">Hold:</span>
-					<HotkeyDisplay
-						config={holdHotkey}
-						error={shortcutErrors?.hold_error}
-					/>
-					<span className="instruction-desc">Hold to record</span>
-				</div>
-				<div className="instruction-method">
-					<span className="instruction-label">Paste:</span>
-					<HotkeyDisplay
-						config={pasteLastHotkey}
-						error={shortcutErrors?.paste_last_error}
-					/>
-					<span className="instruction-desc">Paste last result</span>
-				</div>
-			</div>
-			<p className="instructions-card-text">
-				Speak clearly and your words will be typed wherever your cursor is. The
-				overlay appears in the bottom-right corner of your screen.
-			</p>
+		<div className="dash-card">
+			<p className="dash-card-title">Dictate</p>
+			<Group gap="lg" wrap="wrap">
+				<Group gap={6} wrap="nowrap">
+					<HotkeyDisplay config={toggleHotkey} />
+					<Text size="xs" c="dimmed">
+						toggle
+					</Text>
+				</Group>
+				<Group gap={6} wrap="nowrap">
+					<HotkeyDisplay config={holdHotkey} />
+					<Text size="xs" c="dimmed">
+						hold
+					</Text>
+				</Group>
+				<Group gap={6} wrap="nowrap">
+					<HotkeyDisplay config={pasteLastHotkey} />
+					<Text size="xs" c="dimmed">
+						paste last
+					</Text>
+				</Group>
+			</Group>
 		</div>
 	);
 }
 
-function HomeView() {
+function HomeView({ onShowHistory }: { onShowHistory: () => void }) {
 	return (
 		<div className="main-content">
-			<InstructionsCard />
+			<MeetingsSection />
+			<UpcomingMeetings />
+			<TranscriptsList />
+			<CompactShortcuts />
+			<UnstyledButton onClick={onShowHistory} className="dash-link">
+				Dictation history
+				<ChevronRight size={13} style={{ marginLeft: 2, verticalAlign: "-2px" }} />
+			</UnstyledButton>
+		</div>
+	);
+}
+
+function HistoryView({ onBack }: { onBack: () => void }) {
+	return (
+		<div className="main-content">
+			<UnstyledButton onClick={onBack} className="dash-link" style={{ marginBottom: 12 }}>
+				<ChevronLeft size={13} style={{ marginRight: 2, verticalAlign: "-2px" }} />
+				Back
+			</UnstyledButton>
 			<HistoryFeed />
 		</div>
 	);
@@ -296,8 +308,42 @@ function formatSettingName(setting: string): string {
 
 export default function App() {
 	const [activeView, setActiveView] = useState<View>("home");
+	const [showHistory, setShowHistory] = useState(false);
 	const connectionState = useRecordingStore((s) => s.state);
 	const hasShownConflictNotification = useRef(false);
+
+	// Calendar-driven meeting prep + post-meeting prompts. Starting captures
+	// system audio to a WAV and registers the live session in the meeting store,
+	// which drives the persistent recording banner (DESIGN.md: red = recording).
+	// Stopping + transcription is handled by the banner's Stop button.
+	const startRecordingInStore = useMeetingStore((s) => s.startRecording);
+	useMeetingNotifications({
+		onStartRecording: async (meeting) => {
+			try {
+				const path = await invoke<string>("start_meeting_capture");
+				startRecordingInStore(meeting ?? null, path, Date.now());
+			} catch (e) {
+				notifications.show({
+					title: "Couldn't start recording",
+					message: String(e),
+					// DESIGN.md: red is reserved for live recording; a failure to
+					// start is not a recording, so use neutral grayscale.
+					color: "gray",
+					autoClose: NOTIFICATION_ERROR_TIMEOUT_MS,
+				});
+			}
+		},
+		onEndSession: () => {
+			// The meeting's calendar end-time passed. Nudge, but let the user stop
+			// from the persistent banner (avoids a double-stop path).
+			notifications.show({
+				title: "Meeting ended",
+				message: "Stop the recording from the banner when you're ready.",
+				color: "yellow",
+				autoClose: NOTIFICATION_ERROR_TIMEOUT_MS,
+			});
+		},
+	});
 
 	// Refresh server-side queries when connection is established
 	useRefreshServerQueriesOnConnect(connectionState);
@@ -401,7 +447,15 @@ export default function App() {
 	return (
 		<div className="app-layout">
 			<TopBar activeView={activeView} onViewChange={setActiveView} />
-			{activeView === "home" ? <HomeView /> : <SettingsView />}
+			{activeView === "home" ? (
+				showHistory ? (
+					<HistoryView onBack={() => setShowHistory(false)} />
+				) : (
+					<HomeView onShowHistory={() => setShowHistory(true)} />
+				)
+			) : (
+				<SettingsView />
+			)}
 		</div>
 	);
 }

@@ -44,6 +44,8 @@ class TranscribeRequest(BaseModel):
     wav_path: str
     model: str | None = None
     language: str = "en"
+    backend: str | None = None  # "parakeet_remote" | "whisper_mlx"; None -> env default
+    diarize: bool = True
 
 
 class SummarizeRequest(BaseModel):
@@ -67,6 +69,8 @@ async def transcribe(request: Request, body: TranscribeRequest) -> dict[str, str
 
     model = body.model or getattr(settings, "whisper_mlx_model", None) or "mlx-community/whisper-large-v3-turbo"
 
+    backend = body.backend or getattr(settings, "meeting_stt_backend", None)
+
     asyncio.get_event_loop().run_in_executor(
         None,
         _run_transcription,
@@ -74,6 +78,8 @@ async def transcribe(request: Request, body: TranscribeRequest) -> dict[str, str
         body.wav_path,
         model,
         body.language,
+        backend,
+        body.diarize,
     )
 
     logger.info(f"Transcription job {job_id} queued for {body.wav_path}")
@@ -136,20 +142,30 @@ async def meeting_health() -> dict[str, str]:
     return {"status": "ok", "active_jobs": str(len([j for j in _jobs.values() if j.status == JobStatus.PROCESSING]))}
 
 
-def _run_transcription(job: Job, wav_path: str, model: str, language: str) -> None:
+def _run_transcription(
+    job: Job,
+    wav_path: str,
+    model: str,
+    language: str,
+    backend: str | None = None,
+    diarize: bool = True,
+) -> None:
     """Run transcription in a thread pool."""
     job.status = JobStatus.PROCESSING
     try:
         from processors.meeting_transcriber import transcribe_file
 
-        result = transcribe_file(wav_path, model_name=model, language=language)
+        result = transcribe_file(
+            wav_path, model_name=model, language=language, backend=backend, diarize=diarize
+        )
         job.result = {
             "segments": [
-                {"start_ms": s.start_ms, "end_ms": s.end_ms, "text": s.text}
+                {"start_ms": s.start_ms, "end_ms": s.end_ms, "text": s.text, "speaker": s.speaker}
                 for s in result.segments
             ],
             "full_text": result.full_text,
             "duration_secs": result.duration_secs,
+            "speakers": result.speakers,
         }
         job.status = JobStatus.COMPLETE
         logger.success(f"Transcription job {job.job_id} complete")

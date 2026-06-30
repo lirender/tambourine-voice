@@ -1,0 +1,33 @@
+services:
+  server:
+    privileged: false
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        BASE_IMAGE: ubuntu:24.04
+    ports:
+      - "8765:8765"
+    env_file:
+      - ./server/.env
+    environment:
+      - HF_HOME=/cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/cache/huggingface
+      - TORCH_HOME=/cache/torch
+      - XDG_CACHE_HOME=/cache
+      - WHISPER_DEVICE=cpu
+      - WHISPER_MODEL=small
+    volumes:
+      - server_hf_cache:/cache/huggingface
+      - server_torch_cache:/cache/torch
+      - server_propcache:/cache/propcache
+      - server_pipecat_cache:/cache/pipecat
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  server_hf_cache:
+  server_torch_cache:
+  server_propcache:
+  server_pipecat_cache:

@@ -59,6 +59,16 @@ class Settings(BaseSettings):
         None, description="Nemotron ASR WebSocket URL (ws:// or wss://)"
     )
 
+    # Meeting (batch) transcription backend — distinct from the realtime STT
+    # providers above. "parakeet_remote" offloads to the GB10 Parakeet +
+    # Sortformer diarization service; "whisper_mlx" runs locally on this Mac.
+    meeting_stt_backend: str | None = Field(
+        None, description="Meeting transcription backend: 'parakeet_remote' | 'whisper_mlx'"
+    )
+    parakeet_service_url: str | None = Field(
+        None, description="Base URL of the GB10 Parakeet ASR service (e.g. http://gb10.local:8770)"
+    )
+
     # LLM API Keys (at least one required)
     openai_api_key: str | None = Field(None, description="OpenAI API key for LLM")
     openai_base_url: str | None = Field(

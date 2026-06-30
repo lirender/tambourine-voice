@@ -57,7 +57,11 @@ pub fn type_text_blocking(text: &str) -> Result<(), String> {
     thread::sleep(Duration::from_millis(CLIPBOARD_STABILIZATION_DELAY_MS));
 
     // Simulate Ctrl+V / Cmd+V
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+    let mut enigo = Enigo::new(&Settings {
+        open_prompt_to_get_permissions: false,
+        ..Settings::default()
+    })
+    .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "macos")]
     let modifier = Key::Meta;

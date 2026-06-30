@@ -1,0 +1,11 @@
+cargo:rustc-link-lib=framework=ScreenCaptureKit
+cargo:rerun-if-changed=swift-bridge
+cargo:rustc-link-search=native=/Users/sarvesh/code/Tambourine/tools/sckit-poc/target/debug/build/screencapturekit-9d6bcb0bccbfc9d8/out/swift-build/release
+cargo:rustc-link-lib=static=ScreenCaptureKitBridge
+cargo:rustc-link-lib=framework=Foundation
+cargo:rustc-link-lib=framework=CoreGraphics
+cargo:rustc-link-lib=framework=CoreMedia
+cargo:rustc-link-lib=framework=IOSurface
+cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift
+cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5/macosx
+cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx

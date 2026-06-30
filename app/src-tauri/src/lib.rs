@@ -23,6 +23,7 @@ fn current_epoch_ms() -> u64 {
 mod active_app_context;
 mod audio;
 mod audio_mute;
+mod calendar;
 mod commands;
 mod config_sync;
 pub mod events;
@@ -33,6 +34,7 @@ use events::{EventName, RecordingStartFailedPayload};
 mod mic_capture;
 mod settings;
 mod state;
+mod system_audio;
 
 #[cfg(test)]
 mod tests;
@@ -410,6 +412,16 @@ fn is_audio_mute_supported() -> bool {
     audio_mute::is_supported()
 }
 
+/// Show or clear an attention dot next to the menubar icon.
+/// Used when a finished meeting needs speaker names (DESIGN.md: amber attention).
+#[tauri::command]
+fn set_menubar_attention(app: AppHandle, on: bool) {
+    use tauri::tray::TrayIconId;
+    if let Some(tray) = app.tray_by_id(&TrayIconId::new("main")) {
+        let _ = tray.set_title(if on { Some("●") } else { None });
+    }
+}
+
 /// Start native microphone capture
 #[tauri::command]
 fn start_native_mic(
@@ -572,6 +584,12 @@ pub fn run() {
             resume_native_mic,
             list_native_mic_devices,
             active_app_get_current_context,
+            calendar::get_upcoming_meetings,
+            calendar::request_calendar_access,
+            system_audio::start_meeting_capture,
+            system_audio::stop_meeting_capture,
+            system_audio::meeting_capture_status,
+            set_menubar_attention,
         ])
         .setup(|app| {
             // Initialize history storage
@@ -700,6 +718,9 @@ pub fn run() {
 
             // Auto-hide main window when it loses focus (menubar app behavior)
             if let Some(main_window) = app.get_webview_window("main") {
+                // Ensure window starts hidden even if macOS restores it on reboot
+                let _ = main_window.hide();
+
                 let window_for_blur = main_window.clone();
                 main_window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
@@ -711,6 +732,12 @@ pub fn run() {
 
             // Setup system tray
             setup_tray(app.handle())?;
+
+            // Manage system-audio meeting capture state.
+            app.manage(system_audio::MeetingCapture::default());
+
+            // Start the calendar watcher (pre/post-meeting events).
+            calendar::start_watcher(app.handle().clone());
 
             Ok(())
         })
@@ -728,7 +755,7 @@ fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let icon_bytes = include_bytes!("../icons/tray-iconTemplate@2x.png");
     let icon = tauri::image::Image::from_bytes(icon_bytes)?;
 
-    let _tray = TrayIconBuilder::new()
+    let _tray = TrayIconBuilder::with_id("main")
         .icon(icon)
         .icon_as_template(true)
         .menu(&menu)
